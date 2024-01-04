@@ -1,0 +1,28 @@
+[package]
+name = "rping"
+version = "0.1.1"
+edition = "2021"
+description = "🌊 A TCP SYN flooding attack CLI."
+license = "MIT"
+keywords = ["networking", "pcap", "tcp", "syn"]
+categories = ["command-line-utilities", "network-programming"]
+repository = "https://github.com/wiseaidev/rping"
+documentation = "https://docs.rs/rping"
+authors = ["Mahmoud Harmouch <oss@wiseai.dev>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.12", features = ["derive"] , optional = true  }
+indicatif = { version = "0.17.7" }
+rand = "0.8.5"
+socket2 = { version = "0.5.5", features = ["all"] }
+
+[features]
+cli = ["clap"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = "thin"
+strip = "symbols"
