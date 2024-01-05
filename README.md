@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ```sh
-rping 0.1.1
+rping 0.1.2
  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄        ▄  ▄▄▄▄▄▄▄▄▄▄▄ 
 ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░░▌      ▐░▌▐░░░░░░░░░░░▌
 ▐░█▀▀▀▀▀▀▀█░▌▐░█▀▀▀▀▀▀▀█░▌ ▀▀▀▀█░█▀▀▀▀ ▐░▌░▌     ▐░▌▐░█▀▀▀▀▀▀▀▀▀ 
@@ -26,7 +26,7 @@ Flood a target with a high volume of SYN packets to overwhelm and
 disrupt its network.
 ```
 
-> 🚀 **rping**: A robust Rust-based CLI for SYN flooding attacks.
+> 🚀 **rping**: A robust, fully anonymous, Rust-based CLI for any TCP flag flooding attacks.
 
 ## 📖 Table of Contents
 
