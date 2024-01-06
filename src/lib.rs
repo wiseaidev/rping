@@ -28,6 +28,9 @@
 //! | `--target`              | Specifies the target IP address to flood.                |
 //! | `--port`                | Sets the target port number for the attack.               |
 //! | `--threads`             | Sets the number of threads for the attack.               |
+//! | `--flag`                | Specifies the TCP flag (e.g., syn, ack, urg...).          |
+//! | `--duration`            | Sets the attack duration in minutes.                     |
+//! | `--number`              | Sets the number of packets per thread.                    |
 //!
 //! ## GitHub Repository
 //!

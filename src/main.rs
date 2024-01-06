@@ -39,6 +39,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         args_clone.size,
                         &args_clone.target,
                         args_clone.port.try_into().unwrap(),
+                        &args_clone.flag.to_ascii_lowercase(),
+                        args_clone.duration,
+                        args_clone.number,
                     );
                 });
 

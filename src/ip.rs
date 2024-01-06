@@ -1,12 +1,11 @@
 use crate::tcp::TcpHeader;
-use crate::utils::calculate_ip_checksum;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 /// Represents the IP header structure with its fields.
 ///
 /// This struct follows the IP header format.
-/// Reference: https://github.com/wiseaidev/dark-web-rust/tree/main/chapter-1#13-the-ip-header-struct
+/// Reference: [github.com/wiseaidev/dark-web-rust](https://github.com/wiseaidev/dark-web-rust/tree/main/chapter-1#13-the-ip-header-struct)
 #[repr(C, packed)]
 #[derive(Debug)]
 pub struct IpHeader {
@@ -47,7 +46,7 @@ impl IpHeader {
     /// # Examples
     ///
     /// ```
-    /// use rping::utils::{generate_random_ip, calculate_tcp_checksum};
+    /// use rping::utils::generate_random_ip;
     /// use rping::ip::IpHeader;
     ///
     /// let source_ip = generate_random_ip();
@@ -79,9 +78,6 @@ impl IpHeader {
 
         // Set the total length in the IP header
         ip_header.len = total_length.to_be();
-
-        // Calculate the checksum without TCP header
-        ip_header.sum = calculate_ip_checksum(&ip_header);
 
         // Convert length and checksum to network byte order (big-endian)
         ip_header.len = ip_header.len.to_be();
@@ -116,6 +112,7 @@ impl IpHeader {
     /// ```
     /// Returns a byte slice representing the binary data of the IpHeader.
     pub fn as_bytes(&self) -> &[u8] {
+        // TODO: use Vec<u8>
         unsafe {
             std::slice::from_raw_parts(
                 self as *const Self as *const u8,

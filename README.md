@@ -21,9 +21,9 @@ rping 0.1.2
 🌊 RPING CLI
 ============
 
-A powerful command-line tool for executing TCP SYN flooding attacks.
-Flood a target with a high volume of SYN packets to overwhelm and
-disrupt its network.
+A powerful command-line tool for executing TCP flags flooding attacks.
+Customize attacks with options like packet length, number of threads,
+and TCP flags for efficient network disruption.
 ```
 
 > 🚀 **rping**: A robust, fully anonymous, Rust-based CLI for any TCP flag flooding attacks.
@@ -55,8 +55,8 @@ This will set the [`CAP_NET_RAW` capability](https://man7.org/linux/man-pages/ma
 
 ## ✨ Features
 
-- Perform SYN flooding attacks with customizable parameters.
-- Specify the length of SYN packets, target IP, and target port.
+- Perform any TCP flag, e.g. syn, flooding attacks with customizable parameters.
+- Specify the length of tcp packets, target IP, target port, number of packets and the attack duration.
 - Multi-threaded execution for increased efficiency.
 
 ## 🚗 Usage
@@ -81,6 +81,24 @@ rping -s 150 -t 127.0.0.1 -p 443
 rping -s 1500 -t 127.0.0.1 -p 8080 -h 16
 ```
 
+### Specify the TCP flag (e.g., ack, urg):
+
+```bash
+rping -f ack -t 127.0.0.1 -p 8080
+```
+
+### Set the attack duration in minutes:
+
+```bash
+rping -d 5 -t 127.0.0.1 -p 80
+```
+
+### Set the number of packets per thread:
+
+```bash
+rping -n 10000 -t 127.0.0.1 -p 8080
+```
+
 ## 🎨 Options
 
 | Option                   | Default Value | Description                                              |
@@ -89,6 +107,9 @@ rping -s 1500 -t 127.0.0.1 -p 8080 -h 16
 | `-t, --target`           |               | Specify the target IP address to flood.                  |
 | `-p, --port`             | `80`          | Set the target port number for the attack.               |
 | `-h, --threads`          | `8`           | Set the number of threads for the attack.                |
+| `-f, --flag`             | `syn`         | Specify the TCP flag (e.g., syn, ack, urg...).            |
+| `-d, --duration`         | `1`           | Set the attack duration in minutes.                      |
+| `-n, --number`           | `2^63` | Set the number of packets per thread.            |
 
 ## 🤝 Contributing
 
