@@ -47,22 +47,25 @@ AUTHORS:
 🌊 RPING CLI
 ============
 
-A powerful command-line tool for executing TCP SYN flooding attacks.
-Flood a target with a high volume of SYN packets to overwhelm and
-disrupt its network.
+A powerful command-line tool for executing TCP flags flooding attacks.
+Customize attacks with options like packet length, number of threads,
+and TCP flags for efficient network disruption.
 
 FEATURES:
-  - Packet Length: Set the length of SYN packets to be sent.
+  - Packet Length: Set the length of TCP packets to be sent.
   - Target IP: Specify the target IP address to flood.
   - Target Port: Set the target port number for the attack.
   - Threads: Set the number of threads for the attack.
+  - TCP Flag: Specify the TCP flag (e.g., syn, ack, urg...).
+  - Attack Duration: Set the attack duration in minutes.
+  - Packets Number:  Set the number of packets per thread.
 
 USAGE:
   rping [OPTIONS]
 
 EXAMPLES:
-  Perform SYN flooding attack:
-    rping -s 100 -t 127.0.0.1 -p 80 -h 8
+  Perform SYN flooding attack for 1 minute:
+    rping -s 100 -t 127.0.0.1 -p 80 -h 8 -f syn -n 1000000 -d 1
 
 For more information, visit: https://github.com/wiseaidev/rping
 "#
@@ -87,4 +90,16 @@ pub struct Cli {
     /// Number of threads.
     #[arg(short = 'h', long = "threads", default_value_t = 8)]
     pub threads: usize,
+
+    /// TCP flag (e.g. syn, ack, urg...).
+    #[arg(short = 'f', long = "flag", default_value_t = String::from("syn"))]
+    pub flag: String,
+
+    /// Attack duration (e.g. 2, 5) in minutes.
+    #[arg(short = 'd', long = "duration", default_value_t = 1)]
+    pub duration: usize,
+
+    /// Number of packets (e.g. 100) per thread.
+    #[arg(short = 'n', long = "number", default_value_t = 9223372036854775808)]
+    pub number: usize,
 }
