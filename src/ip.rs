@@ -6,7 +6,6 @@ use std::str::FromStr;
 ///
 /// This struct follows the IP header format.
 /// Reference: [github.com/wiseaidev/dark-web-rust](https://github.com/wiseaidev/dark-web-rust/tree/main/chapter-1#13-the-ip-header-struct)
-#[repr(C, packed)]
 #[derive(Debug)]
 pub struct IpHeader {
     /// Version and Internet Header Length (IHL) combined field.
@@ -65,23 +64,12 @@ impl IpHeader {
             ttl: 50,
             protocol: 6,
             sum: 0,
-            src: source_ip.to_be(),
+            src: source_ip,
             dst: Ipv4Addr::from_str(dest_ip).unwrap().into(),
         };
 
-        // Convert destination IP to big-endian
-        ip_header.dst = ip_header.dst.to_be();
-
         // Calculate the total length (IP header + TCP header)
-        let total_length =
-            (std::mem::size_of::<IpHeader>() + std::mem::size_of::<TcpHeader>()) as u16;
-
-        // Set the total length in the IP header
-        ip_header.len = total_length.to_be();
-
-        // Convert length and checksum to network byte order (big-endian)
-        ip_header.len = ip_header.len.to_be();
-        ip_header.sum = ip_header.sum.to_be();
+        ip_header.len = (std::mem::size_of::<IpHeader>() + std::mem::size_of::<TcpHeader>()) as u16;
 
         ip_header
     }
@@ -107,18 +95,23 @@ impl IpHeader {
     ///
     /// assert_eq!(
     ///     ip_header.as_bytes(),
-    ///     &[69, 0, 20, 0, 0, 0, 0, 0, 64, 6, 127, 0, 1, 0, 168, 192, 2, 0, 168, 192]
+    ///     &[69, 0, 0, 20, 0, 0, 0, 0, 64, 6, 0, 127, 192, 168, 0, 1, 192, 168, 0, 2]
     /// );
     /// ```
     /// Returns a byte slice representing the binary data of the IpHeader.
-    pub fn as_bytes(&self) -> &[u8] {
-        // TODO: use Vec<u8>
-        unsafe {
-            std::slice::from_raw_parts(
-                self as *const Self as *const u8,
-                std::mem::size_of::<Self>(),
-            )
-        }
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(20);
+        bytes.push(self.version_ihl);
+        bytes.push(self.tos);
+        bytes.extend_from_slice(&self.len.to_be_bytes());
+        bytes.extend_from_slice(&self.id.to_be_bytes());
+        bytes.extend_from_slice(&self.offset.to_be_bytes());
+        bytes.push(self.ttl);
+        bytes.push(self.protocol);
+        bytes.extend_from_slice(&self.sum.to_be_bytes());
+        bytes.extend_from_slice(&self.src.to_be_bytes());
+        bytes.extend_from_slice(&self.dst.to_be_bytes());
+        bytes
     }
 }
 
@@ -143,7 +136,7 @@ mod tests {
 
         assert_eq!(
             ip_header.as_bytes(),
-            &[69, 0, 20, 0, 0, 0, 0, 0, 64, 6, 0, 0, 1, 0, 168, 192, 2, 0, 168, 192]
+            &[69, 0, 0, 20, 0, 0, 0, 0, 64, 6, 0, 0, 192, 168, 0, 1, 192, 168, 0, 2]
         );
     }
 }
