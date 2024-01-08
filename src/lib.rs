@@ -47,5 +47,6 @@
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod ip;
+pub mod progress_bar;
 pub mod tcp;
 pub mod utils;

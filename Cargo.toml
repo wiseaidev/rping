@@ -14,7 +14,6 @@ authors = ["Mahmoud Harmouch <oss@wiseai.dev>"]
 
 [dependencies]
 clap = { version = "4.4.12", features = ["derive"] , optional = true  }
-indicatif = { version = "0.17.7" }
 rand = "0.8.5"
 socket2 = { version = "0.5.5", features = ["all"] }
 
