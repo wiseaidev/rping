@@ -49,6 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &args_clone.flag.to_ascii_lowercase(),
                         args_clone.duration,
                         args_clone.number,
+                        &args_clone.iface,
                     ) {
                         eprintln!("Thread failed: {:?}", err);
                     }

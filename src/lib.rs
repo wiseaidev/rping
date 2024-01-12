@@ -31,6 +31,7 @@
 //! | `--flag`                | Specifies the TCP flag (e.g., syn, ack, urg...).          |
 //! | `--duration`            | Sets the attack duration in minutes.                     |
 //! | `--number`              | Sets the number of packets per thread.                    |
+//! | `--iface`              | Sets the network interface to bind the socket to.          |
 //!
 //! ## GitHub Repository
 //!

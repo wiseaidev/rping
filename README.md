@@ -99,6 +99,12 @@ rping -d 5 -t 127.0.0.1 -p 80
 rping -n 10000 -t 127.0.0.1 -p 8080
 ```
 
+### Set the network interface:
+
+```bash
+rping -n 10000 -t 127.0.0.1 -p 8080 -i eth0
+```
+
 ## 🎨 Options
 
 | Option                   | Default Value | Description                                              |
@@ -110,6 +116,10 @@ rping -n 10000 -t 127.0.0.1 -p 8080
 | `-f, --flag`             | `syn`         | Specify the TCP flag (e.g., syn, ack, urg...).            |
 | `-d, --duration`         | `1`           | Set the attack duration in minutes.                      |
 | `-n, --number`           | `2^63` | Set the number of packets per thread.            |
+| `-i, --iface`           | `eth0` | Set the network interface to bind the socket to.        |
+
+> [!NOTE]
+Configuring the network interface is restricted to iOS, macOS, tvOS, or watchOS due to limitations in `socket2`.
 
 ## 🤝 Contributing
 
