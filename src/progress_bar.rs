@@ -68,9 +68,7 @@ impl ProgressBar {
         if remaining_time < 60 {
             println!(
                 "\x1B[2J\x1B[HFlooding in Progress: [{:<60}] {:.2}% | Remaining Time: {}s",
-                progress_bar,
-                progress_percentage,
-                remaining_time
+                progress_bar, progress_percentage, remaining_time
             );
         } else {
             println!(

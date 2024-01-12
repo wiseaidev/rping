@@ -58,14 +58,15 @@ FEATURES:
   - Threads: Set the number of threads for the attack.
   - TCP Flag: Specify the TCP flag (e.g., syn, ack, urg...).
   - Attack Duration: Set the attack duration in minutes.
-  - Packets Number:  Set the number of packets per thread.
+  - Packets Number: Set the number of packets per thread.
+  - Network Interface: Set the network interface to bind the socket to.
 
 USAGE:
   rping [OPTIONS]
 
 EXAMPLES:
   Perform SYN flooding attack for 1 minute:
-    rping -s 100 -t 127.0.0.1 -p 80 -h 8 -f syn -n 1000000 -d 1
+    rping -s 100 -t 127.0.0.1 -p 80 -h 8 -f syn -n 1000000 -d 1 -i eth
 
 For more information, visit: https://github.com/wiseaidev/rping
 "#
@@ -102,4 +103,8 @@ pub struct Cli {
     /// Number of packets (e.g. 100) per thread.
     #[arg(short = 'n', long = "number", default_value_t = 9223372036854775808)]
     pub number: usize,
+
+    ///  The network interface to bind the socket to. Available only on iOS or macOS or tvOS or watchOS.
+    #[arg(short = 'i', long = "iface", default_value_t = String::from("eth0"))]
+    pub iface: String,
 }
