@@ -1,6 +1,6 @@
 [package]
 name = "rping"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "🌊 A Fully Anonymous Any TCP Flag Flooding Attack CLI."
 license = "MIT"
