@@ -1,0 +1,10 @@
+[bumpversion]
+current_version = 0.1.5
+
+[bumpversion:file:Cargo.toml]
+search = version = "{current_version}"
+replace = version = "{new_version}"
+
+[bumpversion:file:README.md]
+search = rping "{current_version}"
+replace = rping "{new_version}"
